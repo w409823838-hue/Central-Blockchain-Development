@@ -1,0 +1,219 @@
+
+import hashlib
+import json
+import time
+from typing import Any, Dict, List, Optional
+
+
+class Block
+    def __init__(self, index int, timestamp float, data Any, previous_hash str = )
+        self.index = index
+        self.timestamp = timestamp
+        self.data = data
+        self.previous_hash = previous_hash
+        self.nonce = 0
+        self.hash = self.calculate_hash()
+
+    def calculate_hash(self) - str
+        
+        حساب الـ SHA-256 لهدف إثبات العمل
+        
+        block_string = f{self.index}{self.timestamp}{json.dumps(self.data, sort_keys=True)}{self.previous_hash}{self.nonce}
+        return hashlib.sha256(block_string.encode()).hexdigest()
+
+    def mine(self, difficulty int) - None
+        
+        إجراء عملية التعدين البحث عن nonce يجعل الهش يبدأ بعدد من الأصفار = difficulty
+        
+        target = 0  difficulty
+        while not self.hash.startswith(target)
+            self.nonce += 1
+            self.hash = self.calculate_hash()
+
+
+class Blockchain
+    def __init__(self, difficulty int = 3, persist_path Optional[str] = None)
+        self.chain List[Block] = []
+        self.difficulty = difficulty
+        self.persist_path = persist_path
+        # إنشاء genesis block
+        self.chain.append(self._create_genesis_block())
+        # حاول تحميل من ملف لو مطلوب
+        if self.persist_path
+            try
+                self._load_from_file()
+            except Exception
+                # لو لم يتمكن من التحميل نكمل بالـ genesis
+                pass
+
+    def _create_genesis_block(self) - Block
+        return Block(0, time.time(), {message Genesis Block}, 0)
+
+    def get_latest_block(self) - Block
+        return self.chain[-1]
+
+    def set_block(self, data Any) - Block
+        
+        ينشئ بلوك جديد (مع التعدين)، يضيفه للـ chain ويرجعه
+        (وظيفة تطبيقية لعملية add + mine)
+        
+        index = len(self.chain)
+        previous_hash = self.get_latest_block().hash
+        new_block = Block(index, time.time(), data, previous_hash)
+        new_block.mine(self.difficulty)
+        self.chain.append(new_block)
+        if self.persist_path
+            self._save_to_file()
+        return new_block
+
+    def get_block(self, index int) - Optional[Dict[str, Any]]
+        
+        استرجاع بلوك حسب index (مرتّب من 0..)
+        
+        if 0 = index  len(self.chain)
+            b = self.chain[index]
+            return self._block_to_dict(b)
+        return None
+
+    def blocks_explorer(self) - List[Dict[str, Any]]
+        
+        إرجاع تمثيل JSON لكل البلوكات في السلسلة
+        
+        return [self._block_to_dict(b) for b in self.chain]
+
+    def mine_block(self, data Any) - Block
+        
+        واجهة بديلة لعملية التعدين نستخدم نفس set_block
+        
+        return self.set_block(data)
+
+    def is_chain_valid(self) - bool
+        
+        تحقق بسيط من سلامة السلسلة (تحقق من hashes وسلاسل الارتباط)
+        
+        for i in range(1, len(self.chain))
+            current = self.chain[i]
+            previous = self.chain[i - 1]
+            if current.hash != current.calculate_hash()
+                return False
+            if current.previous_hash != previous.hash
+                return False
+            if not current.hash.startswith(0  self.difficulty)
+                return False
+        return True
+
+    # ---------- Helpers ----------
+    @staticmethod
+    def _block_to_dict(block Block) - Dict[str, Any]
+        return {
+            index block.index,
+            timestamp block.timestamp,
+            data block.data,
+            previous_hash block.previous_hash,
+            nonce block.nonce,
+            hash block.hash,
+        }
+
+    def _save_to_file(self) - None
+        if not self.persist_path
+            return
+        to_save = {
+            difficulty self.difficulty,
+            chain [self._block_to_dict(b) for b in self.chain],
+        }
+        with open(self.persist_path, w, encoding=utf-8) as f
+            json.dump(to_save, f, ensure_ascii=False, indent=2)
+
+    def _load_from_file(self) - None
+        if not self.persist_path
+            return
+        with open(self.persist_path, r, encoding=utf-8) as f
+            data = json.load(f)
+        self.difficulty = data.get(difficulty, self.difficulty)
+        self.chain = []
+        for b in data[chain]
+            block = Block(
+                index=b[index],
+                timestamp=b[timestamp],
+                data=b[data],
+                previous_hash=b[previous_hash],
+            )
+            block.nonce = b.get(nonce, 0)
+            block.hash = b.get(hash, block.calculate_hash())
+            self.chain.append(block)
+2) واجهة بسيطة (REST API)  node.py
+python
+Copy code
+# node.py
+from flask import Flask, jsonify, request
+from blockchain import Blockchain
+import os
+
+app = Flask(__name__)
+
+# ملف حفظ السلسلة (اختياري) - نفس المجلد
+PERSIST_FILE = os.environ.get(BLOCKCHAIN_PERSIST, chain_data.json)
+
+# نظام مركزي واحد
+chain = Blockchain(difficulty=3, persist_path=PERSIST_FILE)
+
+
+@app.route(blocks, methods=[GET])
+def get_blocks()
+    return jsonify(chain.blocks_explorer()), 200
+
+
+@app.route(blockintindex, methods=[GET])
+def get_block(index)
+    b = chain.get_block(index)
+    if b is None
+        return jsonify({error Block not found}), 404
+    return jsonify(b), 200
+
+
+@app.route(mine, methods=[POST])
+def mine_block()
+    payload = request.get_json()
+    if payload is None
+        return jsonify({error JSON body required}), 400
+
+    data = payload.get(data)
+    if data is None
+        return jsonify({error 'data' field required}), 400
+
+    new_block = chain.mine_block(data)
+    return jsonify({message Block mined, block chain._block_to_dict(new_block)}), 201
+
+
+@app.route(add, methods=[POST])
+def add_block_direct()
+    
+    إضافة بلوك بدون تعدين (لأغراض الاختبار أو عندما تريد تجريب set_block بدون PoW).
+    ملاحظة دالة set_block في الـ class تقوم بالتعدين. إذا أردت bypass التعدين يمكنك
+    تعديل أو إضافة دالة تضع البلوك مباشرة.
+    
+    payload = request.get_json()
+    if payload is None
+        return jsonify({error JSON body required}), 400
+
+    data = payload.get(data)
+    if data is None
+        return jsonify({error 'data' field required}), 400
+
+    # هنا نستخدم نفس واجهة set_block (التي تقوم بالتعدين)
+    block = chain.set_block(data)
+    return jsonify({message Block created (mined), block chain._block_to_dict(block)}), 201
+
+
+@app.route(status, methods=[GET])
+def status()
+    return jsonify({
+        length len(chain.chain),
+        is_valid chain.is_chain_valid(),
+        difficulty chain.difficulty
+    }), 200
+
+
+if __name__ == __main__
+    # خادم للتطوير
+    app.run(host=0.0.0.0, port=5000, debug=True)
